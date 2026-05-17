@@ -790,8 +790,10 @@ def style_plotly_chart(fig):
         tickfont={
             "color": chart_text
         },
-        titlefont={
-            "color": chart_text
+        title={
+            "font": {
+                "color": chart_text
+            }
         },
         linecolor="#d8d2d4"
     )
