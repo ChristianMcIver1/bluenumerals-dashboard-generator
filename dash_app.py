@@ -37,6 +37,8 @@ st.markdown(
         font-family: "Open Sans", sans-serif;
     }
 
+    html,
+    body,
     .stApp {
         background: var(--bn-bg);
         color: var(--bn-text);
@@ -78,19 +80,44 @@ st.markdown(
         border: 1px solid var(--bn-border);
         border-radius: 8px;
         padding: 1rem 1rem .9rem;
+        color: var(--bn-text);
     }
 
     [data-testid="stMetricLabel"] {
-        color: var(--bn-muted);
+        color: var(--bn-muted) !important;
     }
 
     [data-testid="stMetricValue"] {
+        color: var(--bn-text) !important;
         font-weight: 600;
     }
 
+    [data-testid="stMetricDelta"] {
+        color: #137333 !important;
+    }
+
+    [data-testid="stTextInput"] label,
+    [data-testid="stTextInput"] p,
+    [data-testid="stTextInput"] span {
+        color: var(--bn-text) !important;
+    }
+
+    [data-testid="stTextInput"] div[data-baseweb="input"] {
+        background: #ffffff !important;
+        border-color: var(--bn-border) !important;
+        border-radius: 8px;
+    }
+
     [data-testid="stTextInput"] input {
+        background: #ffffff !important;
         border-color: var(--bn-border);
         border-radius: 8px;
+        color: var(--bn-text) !important;
+    }
+
+    [data-testid="stTextInput"] input::placeholder {
+        color: #8b8587 !important;
+        opacity: 1 !important;
     }
 
     [data-testid="stTextInput"] div:focus-within,
@@ -125,6 +152,12 @@ st.markdown(
         border-color: var(--bn-border);
         border-radius: 8px;
         background: var(--bn-card);
+        color: var(--bn-text);
+    }
+
+    [data-testid="stMarkdownContainer"],
+    [data-testid="stCaptionContainer"] {
+        color: var(--bn-text);
     }
 
     .bn-subtitle {
@@ -704,13 +737,15 @@ def render_pills(items):
 
 def style_plotly_chart(fig):
 
+    chart_text = "#1c1919"
+
     fig.update_layout(
         template="plotly_white",
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         font={
             "family": "Open Sans, sans-serif",
-            "color": "#1c1919"
+            "color": chart_text
         },
         margin={
             "l": 12,
@@ -724,7 +759,17 @@ def style_plotly_chart(fig):
             "yanchor": "bottom",
             "y": -0.28,
             "xanchor": "left",
-            "x": 0
+            "x": 0,
+            "font": {
+                "color": chart_text
+            }
+        },
+        hoverlabel={
+            "bgcolor": "#ffffff",
+            "bordercolor": "#e7e3e4",
+            "font": {
+                "color": chart_text
+            }
         },
         hovermode="x unified"
     )
@@ -732,12 +777,29 @@ def style_plotly_chart(fig):
     fig.update_xaxes(
         showgrid=False,
         zeroline=False,
-        title=None
+        title=None,
+        tickfont={
+            "color": chart_text
+        },
+        linecolor="#d8d2d4"
     )
 
     fig.update_yaxes(
         gridcolor="#f0ecee",
-        zeroline=False
+        zeroline=False,
+        tickfont={
+            "color": chart_text
+        },
+        titlefont={
+            "color": chart_text
+        },
+        linecolor="#d8d2d4"
+    )
+
+    fig.update_traces(
+        textfont={
+            "color": chart_text
+        }
     )
 
     return fig
