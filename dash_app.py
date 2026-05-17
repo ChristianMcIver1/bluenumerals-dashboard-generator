@@ -8,6 +8,8 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 from bs4 import BeautifulSoup
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 # ---------------------------------------------------
 # PAGE CONFIG
@@ -497,6 +499,55 @@ def normalize_url(url):
 
     return url
 
+
+def url_candidates(url):
+
+    parsed = urlparse(url)
+
+    hostname = parsed.netloc
+    path = parsed.path or "/"
+
+    hosts = [hostname]
+
+    if hostname.startswith("www."):
+        hosts.append(
+            hostname[4:]
+        )
+
+    else:
+        hosts.append(
+            f"www.{hostname}"
+        )
+
+    candidates = []
+
+    for scheme in ["https", "http"]:
+
+        for host in hosts:
+
+            candidate = parsed._replace(
+                scheme=scheme,
+                netloc=host,
+                path=path
+            ).geturl()
+
+            if candidate not in candidates:
+                candidates.append(
+                    candidate
+                )
+
+    if url in candidates:
+        candidates.remove(
+            url
+        )
+
+    return [url] + candidates
+
+
+class WebsiteScrapeError(Exception):
+
+    pass
+
 # ---------------------------------------------------
 # WEBSITE SCRAPER
 # ---------------------------------------------------
@@ -505,16 +556,68 @@ def normalize_url(url):
 def scrape_business_info(url):
 
     headers = {
-        "User-Agent": "Mozilla/5.0"
+        "User-Agent": (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/124.0 Safari/537.36"
+        ),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9"
     }
 
-    response = requests.get(
-        url,
-        headers=headers,
-        timeout=10
+    retry = Retry(
+        total=2,
+        connect=2,
+        read=1,
+        backoff_factor=0.7,
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=["GET"]
     )
 
-    response.raise_for_status()
+    session = requests.Session()
+    session.mount(
+        "https://",
+        HTTPAdapter(max_retries=retry)
+    )
+    session.mount(
+        "http://",
+        HTTPAdapter(max_retries=retry)
+    )
+
+    errors = []
+    response = None
+
+    for candidate_url in url_candidates(url):
+
+        try:
+
+            response = session.get(
+                candidate_url,
+                headers=headers,
+                timeout=(20, 20)
+            )
+
+            response.raise_for_status()
+
+            break
+
+        except requests.exceptions.RequestException as e:
+
+            errors.append(
+                f"{candidate_url}: {e}"
+            )
+
+            response = None
+
+    if response is None:
+
+        raise WebsiteScrapeError(
+            "The website did not respond from this app's server. "
+            "Tried HTTPS/HTTP and www/non-www versions, but each request failed. "
+            "This is usually caused by the website host blocking or dropping traffic "
+            "from the app environment.\n\n"
+            + "\n".join(errors[-4:])
+        )
 
     soup = BeautifulSoup(
         response.text,
@@ -1122,6 +1225,12 @@ if generate_clicked:
             generate_dashboard(
                 info,
                 profile
+            )
+
+        except WebsiteScrapeError as e:
+
+            st.error(
+                str(e)
             )
 
         except Exception as e:
