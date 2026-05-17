@@ -1,5 +1,6 @@
 import re
 import random
+import time
 from html import escape
 from urllib.parse import urlparse
 
@@ -548,6 +549,78 @@ class WebsiteScrapeError(Exception):
 
     pass
 
+
+WEB_SCRAPE_TIMEOUT_SECONDS = 5
+
+
+def business_name_from_url(url):
+
+    domain = (
+        urlparse(url)
+        .netloc
+        .replace("www.", "")
+    )
+
+    domain_root = domain.split(".")[0]
+
+    words = re.split(
+        r"[-_\s]+",
+        domain_root
+    )
+
+    name = " ".join(
+        word.capitalize()
+        for word in words
+        if word
+    )
+
+    return name or "Business"
+
+
+def fallback_business_info(url, reason):
+
+    domain = (
+        urlparse(url)
+        .netloc
+        .replace("www.", "")
+    )
+
+    title = business_name_from_url(
+        url
+    )
+
+    inferred_terms = " ".join(
+        re.split(
+            r"[-_.]+",
+            domain
+        )
+    )
+
+    generic_text = (
+        f"{title} {inferred_terms} business services clients customers "
+        "operations revenue leads appointments consultations analytics "
+        "professional services accounting financial tax consulting"
+    )
+
+    return {
+        "url": url,
+        "domain": domain,
+        "title": title,
+        "description": (
+            "Fallback dashboard generated from the website name because "
+            "the website could not be analyzed quickly."
+        ),
+        "headings": [
+            "Client Activity",
+            "Revenue Performance",
+            "Lead Conversion",
+            "Operational Follow-ups"
+        ],
+        "text": generic_text,
+        "fallback": True,
+        "fallback_reason": reason
+    }
+
 # ---------------------------------------------------
 # WEBSITE SCRAPER
 # ---------------------------------------------------
@@ -566,9 +639,9 @@ def scrape_business_info(url):
     }
 
     retry = Retry(
-        total=2,
-        connect=2,
-        read=1,
+        total=0,
+        connect=0,
+        read=0,
         backoff_factor=0.7,
         status_forcelist=[429, 500, 502, 503, 504],
         allowed_methods=["GET"]
@@ -586,15 +659,30 @@ def scrape_business_info(url):
 
     errors = []
     response = None
+    started_at = time.monotonic()
+    deadline = started_at + WEB_SCRAPE_TIMEOUT_SECONDS
 
     for candidate_url in url_candidates(url):
 
+        remaining_seconds = deadline - time.monotonic()
+
+        if remaining_seconds <= 0.1:
+            return fallback_business_info(
+                url,
+                "Website analysis exceeded the 5 second limit."
+            )
+
         try:
+
+            request_timeout = max(
+                0.1,
+                min(remaining_seconds, 2)
+            )
 
             response = session.get(
                 candidate_url,
                 headers=headers,
-                timeout=(20, 20)
+                timeout=(request_timeout, request_timeout)
             )
 
             response.raise_for_status()
@@ -611,12 +699,12 @@ def scrape_business_info(url):
 
     if response is None:
 
-        raise WebsiteScrapeError(
-            "The website did not respond from this app's server. "
-            "Tried HTTPS/HTTP and www/non-www versions, but each request failed. "
-            "This is usually caused by the website host blocking or dropping traffic "
-            "from the app environment.\n\n"
-            + "\n".join(errors[-4:])
+        return fallback_business_info(
+            url,
+            (
+                "The website did not respond from this app's server within "
+                "the 5 second analysis limit."
+            )
         )
 
     soup = BeautifulSoup(
@@ -681,7 +769,8 @@ def scrape_business_info(url):
         "title": title,
         "description": description,
         "headings": headings[:15],
-        "text": page_text[:10000]
+        "text": page_text[:10000],
+        "fallback": False
     }
 
 # ---------------------------------------------------
@@ -937,9 +1026,24 @@ def generate_dashboard(info, profile):
         f"## Dashboard Demo - {info['title']}"
     )
 
-    st.caption(
-        f"Generated from public website information at {info['domain']}."
-    )
+    if info.get("fallback"):
+
+        st.caption(
+            f"Generated from the website name at {info['domain']}."
+        )
+
+        st.info(
+            info.get(
+                "fallback_reason",
+                "Website analysis took too long, so a fallback dashboard was generated."
+            )
+        )
+
+    else:
+
+        st.caption(
+            f"Generated from public website information at {info['domain']}."
+        )
 
     # KPI ROW
 
